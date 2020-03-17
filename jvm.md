@@ -210,6 +210,8 @@ jvm的内存模型在1.7和1.8有较大的区别。
 
 #### 2.2、jdk1.8的堆内存模型
 
+![](https://github.com/heartccace/jvmpro/tree/master/src/main/resources/jvm1.8.png)
+
 jdk1.8内存模型由两部分组成，年轻代 + 老年代
 
 年轻代：Eden + 2 * Survivor
