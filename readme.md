@@ -733,7 +733,7 @@ VisualVM使用简单，几乎0配置，功能丰富，几乎囊括了其他JDK�
 
 #### 5.3、标记清除法
 
-![]([https://github.com/heartccace/jvmpro/blob/master/src/main/resources/images/标记清除算法.png))
+![](https://github.com/heartccace/jvmpro/blob/master/src/main/resources/images/标记清除算法.png)
 
 标记清除法将垃圾回收分为两个阶段，分别是标记和清除
 
@@ -751,4 +751,4 @@ VisualVM使用简单，几乎0配置，功能丰富，几乎囊括了其他JDK�
 
 #### 5.4、标记压缩算法
 
-![]([https://github.com/heartccace/jvmpro/blob/master/src/main/resources/images/标记压缩算法.png))
+![](https://github.com/heartccace/jvmpro/blob/master/src/main/resources/images/标记压缩算法.png)
