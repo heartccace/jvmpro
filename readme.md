@@ -554,6 +554,8 @@ JNI global references: 23
 
 #### 4.1、线程的状态
 
+![](https://github.com/heartccace/jvmpro/blob/master/src/main/resources/images/线程状态.jpg)
+
 在java中线程的状态一共分为6种：
 
 - 初始态(NEW)
@@ -752,3 +754,7 @@ VisualVM使用简单，几乎0配置，功能丰富，几乎囊括了其他JDK�
 #### 5.4、标记压缩算法
 
 ![](https://github.com/heartccace/jvmpro/blob/master/src/main/resources/images/标记压缩算法.png)
+
+标记压缩算法在标记清除算法的基础上做了优化改进的算法。和标记清除算法一样，也是从根节点开始，对对象引用进行标记，在清理阶段，并不是简单的清理未标记对象，而是将存活的对象压缩到内存的另一端，然后清理边界以外的垃圾，从而解决碎片化问题。
+
+使用场景：多用于老年代
