@@ -758,3 +758,224 @@ VisualVM使用简单，几乎0配置，功能丰富，几乎囊括了其他JDK�
 标记压缩算法在标记清除算法的基础上做了优化改进的算法。和标记清除算法一样，也是从根节点开始，对对象引用进行标记，在清理阶段，并不是简单的清理未标记对象，而是将存活的对象压缩到内存的另一端，然后清理边界以外的垃圾，从而解决碎片化问题。
 
 使用场景：多用于老年代
+
+#### 5.5、复制算法
+
+![](https://github.com/heartccace/jvmpro/blob/master/src/main/resources/images/复制算法.png)
+
+与标记清除算法相比，复制算法是一种相对高效的回收方法。它的核心思想：将现有的内存分为量块，每次使用其中一块，在垃圾回收时，将正在使用内存中或对象复制到未使用的内存中，之后清理正在使用的内存块中的所有对象，交换两内存角色，完成垃圾回收。可以保证回收后的内存空间没有碎片化，代价是将内存折半。
+
+java新生代串行垃圾回收机制中使用了复制算法的思想。新生代分为eden、from、to三个空间，其中from和to像个空间可视为大小相等的两块。from和to也称为survivor空间。
+
+在垃圾回收时，eden控件中存活的对象会被复制到未使用的survivor空间中（假设是to），正在使用的survivor（假设是from）
+
+中的年轻对象也会被复制到to空间中（大对象或老年对象会直接进入老年代，如果to空间已满，则对象也会直接进入老年代），此时eden空间和from空间中剩余的对象就是垃圾对象，可以直接清空，to空间则存放此后回收后的存活对象。
+
+#### 5.6、分代算法(Generational Collecting)
+
+如复制、标记清除、标记压缩等垃圾回收算法没有一种算法能完全替代其他算法，他们都有自己独特的优势和特点，因此根据垃圾回收对象的特性，使用适合的算法回收，才是明智的选择。
+
+以hot spot为例，它将所有的新建对象都放入到年轻代内存区域，年轻代的特点是对象朝生夕灭，大约90%的新建对象会被很快回收，因此年轻代选择效率搞得复制算法。当一个对象经历几次回收后依然存活，对象就会被放入老年代。老年代对象可以认为在一段时间内，甚至整个应用程序的生命周期中存活。
+
+根据老年代的特性可以采用标记-压缩法。
+
+![](https://github.com/heartccace/jvmpro/blob/master/src/main/resources/images/分代算法.png)
+
+#### 5.7、垃圾收集器以及内存分配
+
+在jvm中实现了多种垃圾收集器，包括：串行垃圾收集器、并行垃圾收集器、CMS(并发)垃圾收集器、G1垃圾收集器。
+
+![](https://github.com/heartccace/jvmpro/blob/master/src/main/resources/images/垃圾收集器的分类.png)
+
+##### 5.7.1、串行垃圾收集器
+
+串行垃圾收集器是指单线程进行垃圾回收，只有一个线程工作，并且java应用中的所有线程都要暂停，等待垃圾回收完成。这种现象称之为STW(Stop-The-World).
+
+对于交互性较强的应用而言，这种垃圾收集器是不能接受的。
+
+```
+#指定垃圾回收算法
+-XX:UseSerialGC 
+#打印垃圾回收信息
+-XX:+PrintGCDetails
+
+/**
+ * @author heartccace
+ * @create 2020-03-18 14:29
+ * @Description 测试串行垃圾回收器SerialGC
+ * @param 配置虚拟机参数：-XX:+UseSerialGC -XX:+PrintGCDetails -Xms8m -Xmx8m
+ * @Version 1.0
+ */
+public class TestGC {
+    private static List<Object> list = new ArrayList<Object>();
+    public static void main(String[] args) {
+        int time = new Random().nextInt(100);
+        while (true) {
+            if(time % 2 == 0) {
+                list.clear();
+            } else {
+                for(int i = 0;i < 1000; i++) {
+                    Properties pro = new Properties();
+                    pro.put("key" + i, "value" + System.currentTimeMillis() + i);
+                    list.add(pro);
+                }
+            }
+            try {
+                Thread.sleep(time);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+}
+
+
+
+#OUTPUT GC日志
+[GC (Allocation Failure) [DefNew: 2176K->255K(2432K), 0.0038030 secs] 2176K->903K(7936K), 0.0038896 secs] [Times: user=0.00 sys=0.00, real=0.00 secs] 
+[GC
+[GC (Allocation Failure) [DefNew: 2432K->2432K(2432K), 0.0000264 secs][Tenured: 4226K->5504K(5504K), 0.0145113 secs] 6658K->5533K(7936K), [Metaspace: 3754K->3754K(1056768K)], 0.0152593 secs] [Times: user=0.02 sys=0.00, real=0.02 secs] 
+[Full GC (Allocation Failure) [Tenured: 5504K->5504K(5504K), 0.0145040 secs] 7936K->6802K(7936K), [Metaspace: 3755K->3755K(1056768K)], 0.0147014 secs] [Times: user=0.00 sys=0.00, real=0.02 secs] 
+
+```
+
+
+
+GC日志解读：
+
+年轻代的内存GC前后大小：
+
+- (Allocation Failure)
+  - 表示垃圾回收的原因
+
+- DefNew
+  - 表示使用的是串行垃圾收集器
+
+-  2176K->255K(2432K)
+  - 表示，年轻代GC前占有2176K内存，GC后占有255K内存，总大小2432K
+
+- 0.0038030 secs
+  - 表示GC所用的时间，单位：毫秒
+
+- 2176K->903K(7936K)
+  - 表示：GC前，堆内存占有2176K，GC后堆内存占有903K，总大小未7936K
+
+- Full GC
+  - 表示：内存空间全部进行GC（包括年轻带、老年代、matespace）
+
+##### 5.7.2、并行垃圾回收器
+
+![](https://github.com/heartccace/jvmpro/blob/master/src/main/resources/images/新生代并行回收.png)
+
+![](https://github.com/heartccace/jvmpro/blob/master/src/main/resources/images/老年代并行回收.png)
+
+并行垃圾回收器在串行垃圾回收器的基础上做了改进，将单线程改为多线程垃圾回收，这样可以缩短垃圾回收时间。
+
+并行垃圾回收器在收集过程中也会暂停应用程序，这和串行垃圾回收器也是一样。只是并行执行速度更快些。
+
+- ParNew垃圾回收器
+
+```
+#开启并行垃圾回收
+#参数设置年轻代采用ParNew回收器，老年代依然是串行回收器
+-XX:+UseParNewGC
+
+
+#output
+[GC (Allocation Failure) [ParNew: 2176K->256K(2432K), 0.0019652 secs] 2176K->925K(7936K), 0.0026358 secs] [Times: user=0.00 sys=0.00, real=0.00 secs] 
+
+```
+
+- ParallelGC垃圾回收器（存在stop the world）
+
+  ParallelGC垃圾回收器工作机制和ParNew收集器一样，只是在此基础上，新增了两个和系统相关的参数，使得其使用起来更加灵活和高效。
+
+  - -XX:+UseParallelGC
+    - 年轻代使用ParallelGC，老年代使用穿行回收器
+
+  - -XX:+UseParallelOldGC
+    - 年轻代使用ParallelGC，老年代使用ParallelOldGC
+
+  - -XX:MaxGCPauseMills
+    - 设置最大垃圾收集的停顿时间，单位为毫秒
+    - 需要注意的是ParallelGC为达到设置的停顿时间，可能会调整堆大小或其它参数，如果堆大小设置较小，就会导致GC工作变得频繁，反而可能会影响性能。
+    - 该参数使用需谨慎
+
+  - -XX:GCTimeRadio
+    - 设置垃圾回收占程序运行时间的百分比，公式为1/（1+n）
+    - 它的值为0-100之间的数字，默认值为99，也就是垃圾回收时间不能草果1%
+
+  - -XX:+UseAdaptiveSizePolicy
+    - 自适应GC模式，垃圾回收器会自动调整新生代、老年代参数，达到吞吐量、堆大小、停顿时间之间的平衡
+    - 一般用于手动调整参数比较困难的场景，让收集器自动调整
+
+##### 5.7.3、CMS垃圾收集器
+
+CMS全称是Concurrent Mark sweep,是一款并发的、使用标记-清除算法的垃圾回收器，该回收器针对老年代垃圾回收，通过-XX:+UseConcMarkSweepGC设置，其中新生代使用并行收集器，老年代使用CMS。
+
+年轻代使用的收集器时ParNew并行收集器
+
+![](https://github.com/heartccace/jvmpro/blob/master/src/main/resources/images/cms工作原理.png)
+
+![](https://github.com/heartccace/jvmpro/blob/master/src/main/resources/images/CMS执行流程.png)
+
+- 初始化标记（CMS-initial-mark），标记root，会导致stop the world
+- 并发标记（CMS-concurrent-mark），与用户线程同时进行
+- 预处理（CMS-concurrent-preclean），与用户线程同时进行
+- 重新标记（CMS-remark），会导致stw
+- 并发清除（CMS-concurrent-sweep），与用户线程同时运行
+- 调整大小，设置CMS在清理之后进行内存压缩，目的清理内存中的碎片
+- 并发重置状态，等待一次CMS的触发（CMS-concurrent-reset），与用户线程同时进行
+
+-XX:CMSinitiatingOccupancyFraction默认值68，表示当老年代空间使用到达68%时会启动一次CMS;如果应用程序内存使用率增长很快，在CMS的执行过程中，已经出现内存不足，此时CMS就会失效，系统将会启动老年代的串行回收。
+
+##### 5.7.4、G1（Garbage First）收集器
+
+G1垃圾收集器是目前最新的垃圾回收器。
+
+与CMS收集器相比，G1收集器是基于标记-压缩算法，不会产生碎片空间，也不会在收集完成之后进行一次独占式的碎片整理工作，它在吞吐量和停顿上要优于CMS收集器。
+
+原理：
+
+G1收集器相比其他收集器而言，最大的区别在于它取消了年轻代、老年代的划分，取而代之的是将堆分为若干个区域（Region）,而这些区域包含了逻辑上的年轻代和老年代，这样做的好处是，我们再也不用单独对每个空间对每个代进行设置了，不用担心内存是否足够。
+
+G1的设计原则时简化JVM性能调优，开发人员只需完成三步：
+1、 第一步：开启G1垃圾回收器
+
+2、 第二步：设置堆大的最大内存
+
+3、 第三步： 设置最大的停顿时间
+
+G1中提供了三种垃圾回收模式，YoungGC、MixedGC和FullGC，它们在不同的条件下触发。
+
+
+
+##### 5.7.5、评价GC策略的指标    
+
+可以用以下指标评价一个垃圾回收器的好坏：
+
+- 吞吐量：指在应用程序的生命周期内，应用程序所花费的时间和系统运行总时间的比值，系统总运行时间 = 应用程序耗时 + GC耗时。如果系统运行10min，GC耗时1min，那么吞吐量为（100 -1）/100 = 99%
+
+- 垃圾回收器负载：和吞吐量相反，垃圾回收器负载值垃圾回收器于系统运行总时间的比值
+
+- 停顿时间：指垃圾回收器正在运行，应用程序的暂停时间。
+
+- 垃圾回收频率：指垃圾回收器多长时间运行一次。
+
+- 反应时间：当一个对象成为垃圾后，多长时间它锁占用的内存空间会被释放
+
+- 堆分配：不同的垃圾回收器堆堆内存的分配方式可能不同，一个良好的收集器应该有一个合理的堆内存区间的划分
+
+  
+
+![](https://github.com/heartccace/jvmpro/blob/master/src/main/resources/images/G1垃圾收集器.png)
+
+在G1划分的区域中，年轻代的垃圾收集器依然采用暂停所有应用线程的方式，将存活对象拷贝到Survivor空间或者老年代，G1收集器通过将对象从一个区域复制到另一个区域完成收集工作。
+
+这就意味着在正常的处理过程中，G1完成堆的压缩(至少部份堆的压缩)，这样也就不会有CMS内存碎片的问题了。
+
+在G1中有特殊的一个区域叫Humongous：
+
+- 如果一个对象占用的空间超过了分区容量的50%，G1收集器就认为这是一个巨型对象。
+- 这些巨型对象，默认会直接分配到老年代，但如果他是一个短时间存在的巨型对象，就会对垃圾回收器造成负面的影响。
+- 为了解决这个问题，G1划分了一个Humongous区，它采用了专门存放巨型对象，如果一个H区装不下一个巨型对象，那么G1就会寻找连续的H区来存储，为了寻找连续的H区，有时候不得不启用Full GC。
