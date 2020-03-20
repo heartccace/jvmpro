@@ -13,6 +13,10 @@ import java.util.Random;
  *               -XX:+UseParallelGC(使用并行垃圾回收)
  *               -XX:+UseParNew(使用并行垃圾回收)
  *               -XX:+UseConcMarkSweepGC（使用cms垃圾收集器）
+ *
+ *               -XX:+UseG1GC -XX:MaxGCPauseMillis=100 -Xmx256m -XX:+PrintGCDetails
+ *               -XX:+PrintGCTimeStamps -XX:+PrintGCDateStamps -XX:+PrintHeapAtGC -Xloggc:f://logs//gc.log
+ *
  * @Version 1.0
  */
 public class TestGC {

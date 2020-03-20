@@ -950,7 +950,99 @@ G1中提供了三种垃圾回收模式，YoungGC、MixedGC和FullGC，它们在�
 
 
 
-##### 5.7.5、评价GC策略的指标    
+![](https://github.com/heartccace/jvmpro/blob/master/src/main/resources/images/G1垃圾收集器.png)
+
+在G1划分的区域中，年轻代的垃圾收集器依然采用暂停所有应用线程的方式，将存活对象拷贝到Survivor空间或者老年代，G1收集器通过将对象从一个区域复制到另一个区域完成收集工作。
+
+这就意味着在正常的处理过程中，G1完成堆的压缩(至少部份堆的压缩)，这样也就不会有CMS内存碎片的问题了。
+
+###### 在G1中有特殊的一个区域叫Humongous：
+
+- 如果一个对象占用的空间超过了分区容量的50%，G1收集器就认为这是一个巨型对象。
+- 这些巨型对象，默认会直接分配到老年代，但如果他是一个短时间存在的巨型对象，就会对垃圾回收器造成负面的影响。
+- 为了解决这个问题，G1划分了一个Humongous区，它采用了专门存放巨型对象，如果一个H区装不下一个巨型对象，那么G1就会寻找连续的H区来存储，为了寻找连续的H区，有时候不得不启用Full GC。
+
+###### G1中的YuongGC：
+
+YuongGC主要对Eden区进行GC，它在Eden空间被耗尽时触发
+
+- Eden空间的数据移动到Suvivor空间中，如果Survivor空间不够，Eden空间的部份数据，直接进入到老年代空间
+- Survivor区中的数据移动到新的Survivor中，也有部分数据晋升到老年代
+- 最终Eden空间的数据为空，GC停止工作，应用线程继续执行。
+
+![](https://github.com/heartccace/jvmpro/blob/master/src/main/resources/images/G1工作原理.png)
+
+###### Remember Set(已记忆集合)：
+
+在GC年轻代对象时，我们如何找到年轻对象中的根对象？
+
+跟对象可能在年轻代中，也可能在老年代中，那么老年代中所有对象都是跟对象？
+
+如果全盘扫描老年代，那么这样扫描会消耗大量时间。
+
+于是G1引进了RSet的概念，它的名称时Remember Set，其作用时跟踪指向某个堆内的对象引用。
+
+![](https://github.com/heartccace/jvmpro/blob/master/src/main/resources/images/RSet.png)
+
+图中每个Region初始化的时候都会初始化一个RSet，Region中每一格代表一个对象（card）。
+
+Region1和Region3中引用了Region2中的对象，所以在Region2的RSet里面记录了，Region1和Region3中的card
+
+
+
+###### G1中的MixedGC
+
+当越来越多的对象晋升到老年代old Region时，为了避免内存被耗尽，虚拟机会触发一次混合垃圾回收，即mixedGC,该算法并不是一次Old GC，除了回收整个Yuong Region，还会回收一部分Old Region，这里需要注意的时一部分Old Region而不是全部，可以选择哪些Old Region进行回收。从而可以对垃圾回收时间进行控制。也需要注意MixedGC并不是FullGC。
+
+MixedGC什么时候触发是由参数-XX:InitialHeapOccupancyPercent=n决定，默认45%，该参数的意思是：当老年代大小占整个堆大小百分比达到该阈值的时候触发。
+
+它的GC步骤分为：
+
+- 全局并发标记(Global concurrent marking)
+
+  全局并发标记分为以下步骤：
+
+  - 初始标记(Initial mark,STW)：标记从根节点直接可到达的对象，这一阶段会执行一次年轻代GC，会产生全局停顿
+  - 根区域扫描(root region scan)：G1 GC在初始标记的存活区域扫描对老年代的引用，并标记被引用的对象，该阶段引用程序（非stw）同时运行，并且只有完成该阶段后，才能开始下一次STW年轻代垃圾回收。
+  - 并发标记（concurrent marking）：G1 CG在整个堆中查找可访问的(存活对的)对象，该阶段与应用程序同时运行，可以被STW年轻代垃圾回收中断。
+  - 重新标记（Remaark Marking，STW）：该阶段时STW的回收，因为程序在运行，针对上一次标记进行修正。
+  - 清除垃圾（cleanup，STW）：清点和重置标记状态，该阶段会STW，该阶段并不会实际去做垃圾的回收，等待evacuation的阶段来回收。
+
+- 拷贝存活对象(evacuation)
+
+  Evacuation阶段时全暂停的，该阶段把一部分的Region里的或对象拷贝到另一部分Region中，从而实现垃圾回收清理。
+
+###### G1垃圾收集器的一些参数：
+
+- -XX:+UseG1GC
+  - 启用G1垃圾收集器
+
+- -XX:MaxGCPauseMillis
+  - 设置期望达到的最大GC停顿时间指标(JVM会尽力实现，但不保证达到)，默认值是200毫秒
+
+- -XX:G1HeapRegionSize=n
+  - 设置G1区域的大小，值是2的幂，范围1MB到32M之间，目标是根据最小java堆大小划分出2048个区域
+  - 默认堆内存的1/2000
+
+- -XX:ParallelGCThreads=n
+  - 设置STW工作线程的值，将n的值设置成逻辑处理器的数量，n的值与逻辑处理器的数量相同。
+- -XX:ConcGCThreads=n
+  - 设置并行标记的线程数，将n设置为并行垃圾回收线程数（ParallelGCThreads）的1/4左右。
+
+- -XX:InitiatingHeapOccupanccyPercent=n
+  - 设置触发标记周期的java堆占用率，默认为整个java堆的45%
+
+###### 对G1垃圾收集器的优化建议
+
+- 年轻代大小
+  - 避免使用-Xmn选项和-XX:NewRatio等其他相关选项设置年轻代大小
+  - 固定年轻代大小会覆盖暂停时间目标
+
+- 暂停时间(200ms)目标不要太严苛
+  - G1 GC的吞吐量为90%的应用程序时间和10%的垃圾回收时间
+  - 评估G1 GC的吞吐量时，暂停时间不要太严苛，目标太严苛表示愿意承受更多的垃圾回收开销，而这会直接影响吞吐量
+
+##### 5.7.5、评价GC策略的指标
 
 可以用以下指标评价一个垃圾回收器的好坏：
 
@@ -968,14 +1060,47 @@ G1中提供了三种垃圾回收模式，YoungGC、MixedGC和FullGC，它们在�
 
   
 
-![](https://github.com/heartccace/jvmpro/blob/master/src/main/resources/images/G1垃圾收集器.png)
+### 6.可视化GC分析工具
 
-在G1划分的区域中，年轻代的垃圾收集器依然采用暂停所有应用线程的方式，将存活对象拷贝到Survivor空间或者老年代，G1收集器通过将对象从一个区域复制到另一个区域完成收集工作。
+#### 6.1、GC日志输出参数
 
-这就意味着在正常的处理过程中，G1完成堆的压缩(至少部份堆的压缩)，这样也就不会有CMS内存碎片的问题了。
+```
+#输出GC日志
+-XX:+PrintGC 
+#输出GC的详细日志
+-XX:+PrintDetailsGC
+#输出GC的时间戳（以基准时间的格式）
+-XX:+PrintGCTimeStamps 
+#输出GC的时间戳（以日期格式，如2020-03-19T21:29）
+-XX:+PrintGCDateStamps
+#进行GC前后，打印出堆信息
+-XX:+PrintHeapAtGC
+#文本文件的输出路径
+-Xloggc:../logs/gc.log
 
-在G1中有特殊的一个区域叫Humongous：
+```
 
-- 如果一个对象占用的空间超过了分区容量的50%，G1收集器就认为这是一个巨型对象。
-- 这些巨型对象，默认会直接分配到老年代，但如果他是一个短时间存在的巨型对象，就会对垃圾回收器造成负面的影响。
-- 为了解决这个问题，G1划分了一个Humongous区，它采用了专门存放巨型对象，如果一个H区装不下一个巨型对象，那么G1就会寻找连续的H区来存储，为了寻找连续的H区，有时候不得不启用Full GC。
+#### 6.2、GC Easy可以堆日志进行在线分析（gceasy.io）
+
+GC性能图表：
+
+![](https://github.com/heartccace/jvmpro/blob/master/src/main/resources/images/g1内存分析.png)
+
+
+
+GC吞吐量图表：
+
+![](https://github.com/heartccace/jvmpro/blob/master/src/main/resources/images/GC吞吐量.png)
+
+
+
+GC分析：
+
+
+
+![](https://github.com/heartccace/jvmpro/blob/master/src/main/resources/images/GC详情整体分析.png)
+
+
+
+### 7、Tomcat优化
+
