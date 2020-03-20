@@ -1102,5 +1102,72 @@ GC分析：
 
 
 
-### 7、Tomcat优化
+### 7、Tomcat8优化
+
+tomcat服务器在javaEE项目中使用率非常高，所以在生产环境堆tomcat的优化也变得非常重要，对tomcat的优化主要从两个方面入手，1是tomcat自身配置，另一个是tomcat运行时jvm虚拟机的调优。
+
+#### 7.1、tomcat配置
+
+配置tomcat conf目录下的tomcat-users.xml文件
+
+```
+#增加以下配置，访问localhost:8080
+<role rolename="manager"/>
+  <role rolename="manager-gui"/>
+  <role rolename="admin"/>
+  <role rolename="admin-gui"/>
+  <user username="tomcat" password="tomcat" roles="manager,manager-gui,admin,admin-gui"/>
+```
+
+![](https://github.com/heartccace/jvmpro/blob/master/src/main/resources/images/查看tomcat步骤1.png)
+
+![](https://github.com/heartccace/jvmpro/blob/master/src/main/resources/images/查看tomcat步骤2.png)
+
+#### 7.2、禁用AJP连接
+
+在Tomcat的管理页面可以看到AJP默认开启
+
+![](https://github.com/heartccace/jvmpro/blob/master/src/main/resources/images/AJP.png)
+
+AJP(Apache JServer Protocol)
+
+AJPv13协议是面向包的，WEB服务器和Server容器通过TCP连接来交互，为了节省SOCKET创建的昂贵代价，WEB服务器会尝试维护一个永久的TCP连接到Servlet容器，并且在多个请求响应周期过程会重用连接。
+
+当未使用nginx等可以禁用AJP协议
+
+![](https://github.com/heartccace/jvmpro/blob/master/src/main/resources/images/AJP协议.png)
+
+#### 7.3、执行器（线程池）
+
+在tomcat中每一格用户请求一个线程，所以可以使用线程池来提高性能。修改server.xml
+
+![](https://github.com/heartccace/jvmpro/blob/master/src/main/resources/images/配置连接器.png)
+
+
+
+![](https://github.com/heartccace/jvmpro/blob/master/src/main/resources/images/连接器查看.png)
+
+#### 7.4、三种运行方式
+
+tomcat的运行方式有三种：
+
+1、bio
+
+默认的模式，性能非常地下，没有经过任何优化处理和支持
+
+2、nio
+
+nio（new I/O），是java1。4以后版本提供的一种新I/O,java nio是一个基于缓冲区，并能提供阻塞I/O操作的api，因此nio也被堪称non-blocking I/O的缩写，它拥有比传统I/O更好的并发性。
+
+3、apr
+
+安装起来最困难，但是从操作系统界别来解决异步I/O问题，大幅度提高性能。推荐使用nio，tomcat8中有nio2，速度更快：设置nio2
+
+```
+ #开启nio2 将protocol配置org.apache.coyote.http11.Http11Nio2Protocol
+ <Connector executor="tomcatThreadPool" 
+			   port="8080" protocol="org.apache.coyote.http11.Http11Nio2Protocol"
+               connectionTimeout="20000"
+               redirectPort="8443" />
+```
 
