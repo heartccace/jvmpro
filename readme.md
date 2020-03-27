@@ -163,7 +163,7 @@ jvm的-X参数是非标准参数，在不同版本的jvm中，参数可能会有
 
 ##### 1.6.2、查看正在运行的java进程参数
 
-使用jps或者jps -l查看java进程
+使用jps或者jps -l查看java进程或者使用jcmd
 
 > C:\Users\admin>jps -l
 > 27312 sun.tools.jps.Jps
@@ -171,7 +171,7 @@ jvm的-X参数是非标准参数，在不同版本的jvm中，参数可能会有
 > 32100 springmvc-1.0-SNAPSHOT-war-exec.jar
 > 13676
 
-查看所有的参数，用法： jinfo -flags <进程id>
+查看所有的参数，用法： jinfo -flags <进程id> 或者jcmd pid VM.flags
 
 > C:\Users\admin>jinfo -flags 32100
 > Attaching to process ID 32100, please wait...
@@ -1171,3 +1171,241 @@ nio（new I/O），是java1。4以后版本提供的一种新I/O,java nio是一�
                redirectPort="8443" />
 ```
 
+#### 7.5、tomcat实战
+
+使用jmeter测试10000个请求（1000个线程，每隔1s，执行10次）,在tomcat9下未配置任何参数，测试结果：
+
+![](https://github.com/heartccace/jvmpro/blob/master/src/main/resources/images/tomcat9未作配置情况.png)
+
+##### tomcat参数调优(从tomcat角度进行调优)
+
+设置对照组，对照条件：
+
+- 禁用AJP功能
+- 设置excutor(线程池)，不同数量，进行对比
+- 设置连接协议(nio/nio2)
+
+###### 从jvm角度进行调优（主要设置垃圾回收器）
+
+```
+#虚拟机参数 将参数配置到cataline.bat/cataline.sh
+#设置位置
+:gotJsseOpts
+set "JAVA_OPTS=%JAVA_OPTS% %JSSE_OPTS%"
+
+rem Register custom URL handlers
+rem Do this here so custom URL handles (specifically 'war:...') can be used in the security policy
+set "JAVA_OPTS=%JAVA_OPTS% -Djava.protocol.handler.pkgs=org.apache.catalina.webresources"
+set "JAVA_OPTS=%JAVA_OPTS% -XX:+UseParallelGC -XX:+UseParallelOldGC -Xms64m -Xmx512m -XX:+PrintGCDetails -XX:+PrintGCTimeStamps -XX:+PrintGCDateStamps -XX:+PrintHeapAtGC -Xloggc:../logs/gc.log"
+
+```
+
+### 8、JVM字节码
+
+有时我们在源码角度分析，无法判断效率问题，可以通过字节码方式进行进一步分析，比如字符串拼接问题。判断使用“+”效率高还是StringBuilder效率高。
+
+```
+public class Test{
+	public static void main(String[] args) {
+		int a = 2;
+		int b = 5;
+		int c = b - a;
+		System.out.println(c);
+	}
+}
+```
+
+
+
+```
+C:\Users\admin\Desktop\java>javap -v Test.class
+Classfile /C:/Users/admin/Desktop/java/Test.class
+  Last modified 2020-3-25; size 398 bytes
+  MD5 checksum a638d93d1191aa144f8140f0fcfcd644
+  Compiled from "Test.java"
+public class Test
+  minor version: 0
+  major version: 52
+  flags: ACC_PUBLIC, ACC_SUPER
+Constant pool:
+   #1 = Methodref          #5.#14         // java/lang/Object."<init>":()V
+   #2 = Fieldref           #15.#16        // java/lang/System.out:Ljava/io/PrintStream;
+   #3 = Methodref          #17.#18        // java/io/PrintStream.println:(I)V
+   #4 = Class              #19            // Test
+   #5 = Class              #20            // java/lang/Object
+   #6 = Utf8               <init>
+   #7 = Utf8               ()V
+   #8 = Utf8               Code
+   #9 = Utf8               LineNumberTable
+  #10 = Utf8               main
+  #11 = Utf8               ([Ljava/lang/String;)V
+  #12 = Utf8               SourceFile
+  #13 = Utf8               Test.java
+  #14 = NameAndType        #6:#7          // "<init>":()V
+  #15 = Class              #21            // java/lang/System
+  #16 = NameAndType        #22:#23        // out:Ljava/io/PrintStream;
+  #17 = Class              #24            // java/io/PrintStream
+  #18 = NameAndType        #25:#26        // println:(I)V
+  #19 = Utf8               Test
+  #20 = Utf8               java/lang/Object
+  #21 = Utf8               java/lang/System
+  #22 = Utf8               out
+  #23 = Utf8               Ljava/io/PrintStream;
+  #24 = Utf8               java/io/PrintStream
+  #25 = Utf8               println
+  #26 = Utf8               (I)V
+{
+  public Test(); //构造函数描述
+    descriptor: ()V // 返回值类型void
+    flags: ACC_PUBLIC // 修饰符public
+    Code:
+      stack=1, locals=1, args_size=1
+         0: aload_0
+         1: invokespecial #1                  // Method java/lang/Object."<init>":()V
+         4: return
+      LineNumberTable:
+        line 1: 0
+
+  public static void main(java.lang.String[]);
+    descriptor: ([Ljava/lang/String;)V //参数类型未字符串，返回值未void
+    flags: ACC_PUBLIC, ACC_STATIC // 修饰符未public 和 static
+    Code:
+    // stack=2，操作栈大小为2，locals=4，本地变量表大小, args_size=1，参数的个数
+      stack=2, locals=4, args_size=1
+         0: iconst_2 //从常量池将数字2压入操作栈，位于栈的最上面
+         1: istore_1 // 将操作栈中弹出一个元素(数字2)，放入到本地变量表中，位于下标一的位置（下标为0的是this）
+         2: iconst_5 // 将数字5压入操作栈，位于栈的最上面
+         3: istore_2 // 将操作栈中的最上面元素5弹出，放到本地变量表中，位于下标为2的位置
+         4: iload_2 //将本地变量表中下标为2的元素压入到操作栈（5）
+         5: iload_1 //将本地变量表中下标为1的元素压入到操作栈（1）
+         6: isub //操作栈中的两个数字相减
+         7: istore_3 // 将相减的结果压入到本地变量表中，位于下标为3的位置（3）
+         8: getstatic     #2                  // Field java/lang/System.out:Ljava/io/PrintStream;
+        11: iload_3
+        12: invokevirtual #3                  // Method java/io/PrintStream.println:(I)V
+        15: return
+      LineNumberTable: // 源码中的行数对应的字节码位置
+        line 3: 0
+        line 4: 2
+        line 5: 4
+        line 6: 8
+        line 7: 15
+}
+SourceFile: "Test.java"
+```
+
+++i 和 i++分析
+
+```
+C:\Users\admin\Desktop\java>javap -v TestSum.class
+Classfile /C:/Users/admin/Desktop/java/TestSum.class
+  Last modified 2020-3-25; size 424 bytes
+  MD5 checksum bf1856a747083c068e0b7231f2c11780
+  Compiled from "TestSum.java"
+public class TestSum
+  minor version: 0
+  major version: 52
+  flags: ACC_PUBLIC, ACC_SUPER
+Constant pool:
+   #1 = Methodref          #5.#16         // java/lang/Object."<init>":()V
+   #2 = Methodref          #4.#17         // TestSum.firstsum:()V
+   #3 = Methodref          #4.#18         // TestSum.secondsum:()V
+   #4 = Class              #19            // TestSum
+   #5 = Class              #20            // java/lang/Object
+   #6 = Utf8               <init>
+   #7 = Utf8               ()V
+   #8 = Utf8               Code
+   #9 = Utf8               LineNumberTable
+  #10 = Utf8               main
+  #11 = Utf8               ([Ljava/lang/String;)V
+  #12 = Utf8               firstsum
+  #13 = Utf8               secondsum
+  #14 = Utf8               SourceFile
+  #15 = Utf8               TestSum.java
+  #16 = NameAndType        #6:#7          // "<init>":()V
+  #17 = NameAndType        #12:#7         // firstsum:()V
+  #18 = NameAndType        #13:#7         // secondsum:()V
+  #19 = Utf8               TestSum
+  #20 = Utf8               java/lang/Object
+{
+  public TestSum();
+    descriptor: ()V
+    flags: ACC_PUBLIC
+    Code:
+      stack=1, locals=1, args_size=1
+         0: aload_0
+         1: invokespecial #1                  // Method java/lang/Object."<init>":()V
+         4: return
+      LineNumberTable:
+        line 1: 0
+
+  public static void main(java.lang.String[]);
+    descriptor: ([Ljava/lang/String;)V
+    flags: ACC_PUBLIC, ACC_STATIC
+    Code:
+      stack=0, locals=1, args_size=1
+         0: invokestatic  #2                  // Method firstsum:()V
+         3: invokestatic  #3                  // Method secondsum:()V
+         6: return
+      LineNumberTable:
+        line 3: 0
+        line 4: 3
+        line 5: 6
+
+  public static void firstsum();
+    descriptor: ()V
+    flags: ACC_PUBLIC, ACC_STATIC
+    Code:
+      stack=1, locals=2, args_size=0
+         0: iconst_1
+         1: istore_0
+         2: iload_0
+         3: iinc          0, 1
+         6: istore_1
+         7: return
+      LineNumberTable:
+        line 8: 0
+        line 9: 2
+        line 10: 7
+
+  public static void secondsum();
+    descriptor: ()V
+    flags: ACC_PUBLIC, ACC_STATIC
+    Code:
+      stack=1, locals=2, args_size=0
+         0: iconst_1
+         1: istore_0
+         2: iinc          0, 1
+         5: iload_0
+         6: istore_1
+         7: return
+      LineNumberTable:
+        line 13: 0
+        line 14: 2
+        line 15: 7
+}
+SourceFile: "TestSum.java"
+```
+
+```
+#i++
+stack=1, locals=2, args_size=0
+         0: iconst_1	//将常量池中1压入到操作数栈的最上面
+         1: istore_0	// 将操作数栈的顶端元素弹出，放到下表为0的本地变量表中（1）
+         2: iload_0		// 将本地变量表中0位置的数压入到操作数栈中
+         3: iinc          0, 1 //将本地表量表中的0位置的元素加1
+         6: istore_1	// 将操作数栈的元素弹出放到下标为1的本地变量表中
+         7: return		
+```
+
+```
+#++i
+```
+
+  stack=1, locals=2, args_size=0
+         0: iconst_1 			//将常量池中1压入到操作数栈的最上面
+         1: istore_0				// 将操作数栈的顶端元素弹出，放到下表为0的本地变量表中（1）
+         2: iinc          0, 1	 //将本地表量表中的0位置的元素加1
+         5: iload_0				// 将本地变量表中0位置的数压入到操作数栈中
+         6: istore_1				// 将操作数栈的元素弹出放到下标为1的本地变量表中
+         7: return					// 如果有返回值，将返回操作数栈中的值
