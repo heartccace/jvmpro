@@ -1,6 +1,6 @@
 <center><h1>jvm性能调优(基于java1.8)</h1></center>
 
-### 1、JVM的运行参数（https://docs.oracle.com/javase/8/docs/index.html）
+### 1、JVM的运行参数（https://docs.oracle.com/javase/8/docs/index.html && https://docs.oracle.com/javase/specs）
 
 在jvm中有很多参数可以进行设置，这样可以让jvm在各种环境中能够高效的运行，绝大多数参数保持默认即可。
 
@@ -1409,3 +1409,140 @@ stack=1, locals=2, args_size=0
          5: iload_0				// 将本地变量表中0位置的数压入到操作数栈中
          6: istore_1				// 将操作数栈的元素弹出放到下标为1的本地变量表中
          7: return					// 如果有返回值，将返回操作数栈中的值
+
+# 补充
+
+1、JVM规范允许类加载器在预料到某个类将要被使用时就预先加载它，如果在预先加载的过程中遇到.class文件缺失或存在错误，类加载器必须在程序首次主动使用该类时才报告错误，如果这个类一直没有被程序主动使用，那么类加载器就不会报错误。
+
+2、当一个A类调用另一个B类的类常量时，在编译阶段（将java文件编译成class文件）时，会将B类常量加入到A类的常量池，故调用A类时B类不会被加载。
+
+3、类主动初始化的情况
+
+- 创建该类的实例
+- 访问该类的静态变量或者修改该类的静态变量
+- 调用该类的静态方法
+- Class.forName()
+- 子类的实例化会导致父类的加载
+- java7的InvokeMethod
+
+4、调用ClassLoader的loadClass并不是对一个类的主动使用，不会导致类的初始化
+
+5、类加载过程：
+
+- Invoke findLoadedClass(String) to check if the class has already been loaded.
+- Invoke the loadClass method on the parent class loader. If the parent is null the class loader built-in to the virtual machine is used, instead.
+- Invoke the findClass(String) method to find the class.
+
+##### 命名空间：
+
+1、每个类加载器都有自己的命名空间，命名空间由该类加载器及所有父加载器所加载的类组成（父加载器，无法感知子加载器所加载的类，但是子加载器可以感知父加载器所加载的类）
+
+2、在同一命名空间中，不会出现类的完整名字（包括类的包名）相同的两个类
+
+3、在不同的命名空间中 ，可能会出现类的完整名字（包括类的包名）相同的两个类。
+
+##### 类的卸载
+
+由用户自定义的类加载器所加载的类是可以被卸载的
+
+1、该类的所有实例为null
+
+2、该类的class对象为null
+
+3、该类的类加载器被回收
+
+###### JVM双亲委托机制的好处
+
+1、可以确保java核心库的类型安全：所有的java应用都至少会引用java.lang.Object类，也就是说在运行期，java.lang.Object这个类会被加载到java虚拟机中；如果这个类加载过程中是由java应用自己的类加载器所完成的，那么很可能就会在JVM中存在多个版本的java.lang.Object类，而且这些类之间还是不兼容的，相互不可见的。借助于双亲委托机制，java核心类库中的类加载工作都是由启动类加载器来同意完成的，从而确保了java应用所使用的都是同一个版本的java核心类库，他们之间相互兼容。
+
+2、可以确保java核心类库所提供的类不会被自定义类库代替
+
+3、不同的类加载器可以为相同名称（binary name）的类创建额外的命名空间，相同名称的类可以并存在java虚拟机中，只需要用不同的类加载器来加载他们即可。不同类加载器加载的类之间是不兼容的，这就相当于在java虚拟机内创建了一个又一个相互隔离的java类空间，这类技术在很多框架中都得到了实际应用。
+
+4、运行期，一个java类是该类的完全限定名（binary name）和用于加载该类的定义类加载器（defining loader）所共同决定的。如果同样名字（即相同的完全限定名）的类是由两个不同的类加载器所加载，那么这些类就是不同的，即便.class文件的字节码完全一样，并且从相同的位置加载亦是如此。
+
+5、内建于jvm中的启动类加载器会加载java.lang.ClassLoader以及其他的java平台类，当jvm启动时，一块特殊的机器码会执行，它会加载扩展类加载器与系统类加载器，这块特殊的机器码，叫做启动类加载器。启动类加载器并不是java类，而其他的加载器都是java类。
+
+6、Class.forName( className) 和调用Class.forName(className, true, currentLoader)一样，第二个参数表示是否初始化，默认为true
+
+7、当前类加载器：每个类都会使用自己的类加载器（即加载自身类加载器）来去加载其它类，如果classx引用了classy，那么classx的类加载器就回去加载classy（前提classy未被加载）
+
+8、线程上下文加载器是从JDK1.2引入，类Thread中的getContextClassLoader()和setContextClassLoader()分别用来获取和设置上下文类加载器。如果没有通过setContextClassLoader()设置上下文类加载器的话，线程将继承其父线程上下文类加载器。java应用运行时的初始化线程的上下文类加载器是系统类加载器，在线程中运行的代码可以通过该类加载器来加载类与资源
+
+###### 线程上下文的重要性
+
+9、SPI(Service provider Interface)：父classloader可以使用当前线程Thread.getCurrentThread().getContextClassLoader()所指定的classloader加载的类，这就改变了父classloader不能使用子classloader或其他没有直接父子关系的classloader加载的类的情况，即改变了双亲委托机制。
+
+线程上线文类加载器就是当前线程的Current classloader。
+
+在双亲委托模型下，类加载由上至下的，即下层的类加载器会委托上层进行加载，单是对于SPI来说，有些接口时java核心库所提供的，而java核心库是由启动类加载器来加载的，而这些接口的实现却来自不同的jar包（厂商提供），java的启动类加载器是不会加载其他来源的jar包，这样传统的双亲委托模型就无法满足SPI的要求，而通过给当前线程设置上下文类加载器，就可以由设置的上下文类加载器来实现对于接口实现类的加载。
+
+10、ServiceLoader（服务提供者）用于加载第三方服务，加载jar包下MATE-INF下面的services文件里面的类，该文件命名规则是以全限定接口或者类名的方式，该类使用了线程上下文类加载器。
+
+11、jdbc驱动加载分析
+
+```
+// 深入分析
+Class.forName("com.mysql.jdbc.Driver");
+// 需要深度分析，会使用Thread.currentThread().getContextClassLoader()来加载第三方的jar
+Connection connection = DriverManager.getConnection("jdbc:mysql://localhost:3306/sys?useUnicode=true&characterEncoding=utf-8&useSSL=false", "root", "root");
+```
+
+```
+// mysql驱动类，通过Class.forName("com.mysql.jdbc.Driver")会导致Driver加载，并初始化，初始化会执行 // 静态变量赋值以及静态代码块
+public class Driver extends NonRegisteringDriver implements java.sql.Driver {
+    //
+    // Register ourselves with the DriverManager
+    //
+    static {
+        try {
+        // DriverManager会被Launcher@AppclassLoader加载，并初始化
+        // 执行DriverManager的时候，会执行静态代码块，该代码块会调用SPI，使用ServicesLoader加载META-INF下services下面的java.sql.Driver文件，将里面的类加载到内存，并初始化
+            java.sql.DriverManager.registerDriver(new Driver());
+        } catch (SQLException E) {
+            throw new RuntimeException("Can't register driver!");
+        }
+    }
+
+    /**
+     * Construct a new driver and register it with DriverManager
+     * 
+     * @throws SQLException
+     *             if a database error occurs.
+     */
+    public Driver() throws SQLException {
+        // Required for Class.forName().newInstance()
+    }
+}
+```
+
+### 1、类的加载、连接与初始化
+
+- 加载：查找并加载类的字节码文件
+  - 调用findLoadedClass去检查该类是否被加载
+  - 调用父类的loadclass，如果父类是null，则使用虚拟机内置的类加载器
+  - 调用findClass去查找类
+
+- 链接
+  - 验证：确保被加载类的正确性
+  - 准备：为类的静态变量分配内存空间，并将其初始化为默认值
+  - 解析：把类的符号引用转换为直接引用
+
+- 初始化：为类的静态变量赋予正确的初始值
+
+  
+
+### 2、字节码文件
+
+======一个字节8位，一个16进制位4位，一个字节等于两个16进制=====
+
+使用javap -v 命令分析一个字节码文件时，将会分析该字节码文件的魔数、版本号、常量池、类信息、类的构造方法、类中方法信息、类变量与成员变量等信息。
+
+魔数：所有的.class字节码文件的前四个字节都是魔数，魔数固定值0XCAFEBABE
+
+版本号：魔数之后的四个字节表示版本号，前两个字节表示次版本号，后两个字节表示主版本号
+
+常量池：紧接着版本号之后的就是常量池入口，一个java类中定义的很多信息都是由常量池来统一维护和描述的。可以将常量池看作是Class文件的资源仓库，包括java类定义的方法与变量信息，他们都是存储在常量池中，常量池中主要存储两类常量：字面量和符号引用。字面量如文本字符串，java中声名为final的常量值等，而符号引用比如类和接口的全局限定名，字段的名称和描述符，方法的名称和描述符等。
+
+常量池的总体结构：java类所对应的常量池主要由常量池数量与常量池数组共同构成。常量池数量紧跟在主版本后面占据两个字节，常量池数组紧跟在常量池数量之后，常量池数组与一般数组不同的是：常量池数组中不同的元素的类型、结构都是不同的，长度当然也不同，但是每一种元素的第一个数据都是一个U1类型，该字节是个标志位，占据一个字节，JVM在解析常量池时，会根据这个U1类型来获取元素的具体类型。值得注意的是：常量池中常量的个数=常量池个数 - 1，目的在于满足某些常量池索引的数据在特定条件下需要表达（不引用任何一个常量池）的含义，根本原因在于索引为0也是一个常量（保留常量），只不过他不位于常量表中，这个常量对应null值，所以常量池的索引从1而非0开始。
+
