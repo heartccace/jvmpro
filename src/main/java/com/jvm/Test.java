@@ -25,8 +25,16 @@ public class Test {
         j++;
     }
     public static void main(String[] args) throws ClassNotFoundException, SQLException {
-        Class.forName("com.mysql.jdbc.Driver");
-        Connection connection = DriverManager.getConnection("jdbc:mysql://localhost:3306/sys?useUnicode=true&characterEncoding=utf-8&useSSL=false", "root", "root");
-        System.out.println(connection);
+        int i =1;
+        i =  i ++; // 本地变量表                1   2   3
+        System.out.println(i); // 1            3
+        int j = i ++;          //                  1
+        int k = i+ ++i * i++;
+        System.out.println(i); // 4
+        System.out.println(j); // 1
+        System.out.println(k);
+//        Class.forName("com.mysql.jdbc.Driver");
+//        Connection connection = DriverManager.getConnection("jdbc:mysql://localhost:3306/sys?useUnicode=true&characterEncoding=utf-8&useSSL=false", "root", "root");
+//        System.out.println(connection);
     }
 }

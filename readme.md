@@ -1546,3 +1546,250 @@ public class Driver extends NonRegisteringDriver implements java.sql.Driver {
 
 常量池的总体结构：java类所对应的常量池主要由常量池数量与常量池数组共同构成。常量池数量紧跟在主版本后面占据两个字节，常量池数组紧跟在常量池数量之后，常量池数组与一般数组不同的是：常量池数组中不同的元素的类型、结构都是不同的，长度当然也不同，但是每一种元素的第一个数据都是一个U1类型，该字节是个标志位，占据一个字节，JVM在解析常量池时，会根据这个U1类型来获取元素的具体类型。值得注意的是：常量池中常量的个数=常量池个数 - 1，目的在于满足某些常量池索引的数据在特定条件下需要表达（不引用任何一个常量池）的含义，根本原因在于索引为0也是一个常量（保留常量），只不过他不位于常量表中，这个常量对应null值，所以常量池的索引从1而非0开始。
 
+#### class文件结构(插件jclasslib)
+
+1、Magic Number 4个字节
+
+2、Version 4个字节
+
+3、Constant Pool 2 + n个字节（2个字节的 常量池数量，n个常量）
+
+4、Access flag 2个字节
+
+5、This class name 2个字节
+
+6、Super class name 2个字节
+
+7、Interface 2个字节
+
+8、Fileds 2+n个字节
+
+9、Methods 2 + n个字节
+
+10、Attribute 2+ n 个字节
+
+![](https://github.com/heartccace/jvmpro/blob/master/src/main/resources/images/class结构.png)
+
+
+
+3、java字节码文件结构
+
+```
+ClassFile {
+    u4             magic;
+    u2             minor_version;
+    u2             major_version;
+    u2             constant_pool_count;
+    cp_info        constant_pool[constant_pool_count-1];
+    u2             access_flags;
+    u2             this_class;
+    u2             super_class;
+    u2             interfaces_count;
+    u2             interfaces[interfaces_count];
+    u2             fields_count;
+    field_info     fields[fields_count];
+    u2             methods_count;
+    method_info    methods[methods_count];
+    u2             attributes_count;
+    attribute_info attributes[attributes_count];
+}
+```
+
+```
+cp_info {
+    u1 tag;
+    u1 info[];
+}
+```
+
+
+
+```
+//类访问和属性修饰符
+Flag Name	Value	Interpretation
+ACC_PUBLIC	0x0001	Declared public; may be accessed from outside its package.
+ACC_FINAL	0x0010	Declared final; no subclasses allowed.
+ACC_SUPER	0x0020	Treat superclass methods specially when invoked by the invokespecial instruction.
+ACC_INTERFACE	0x0200	Is an interface, not a class.
+ACC_ABSTRACT	0x0400	Declared abstract; must not be instantiated.
+ACC_SYNTHETIC	0x1000	Declared synthetic; not present in the source code.
+ACC_ANNOTATION	0x2000	Declared as an annotation type.
+ACC_ENUM	0x4000	Declared as an enum type.
+```
+
+
+
+```
+#字段描述符的解释
+FieldType term	Type	Interpretation
+B	byte	signed byte
+C	char	Unicode character code point in the Basic Multilingual Plane, encoded with UTF-16
+D	double	double-precision floating-point value
+F	float	single-precision floating-point value
+I	int	integer
+J	long	long integer
+L ClassName ;	reference	an instance of class ClassName
+S	short	signed short
+Z	boolean	true or false
+[	reference	one array dimension
+```
+
+```
+#常量池标签
+Constant Type	Value
+CONSTANT_Class	7
+CONSTANT_Fieldref	9
+CONSTANT_Methodref	10
+CONSTANT_InterfaceMethodref	11
+CONSTANT_String	8
+CONSTANT_Integer	3
+CONSTANT_Float	4
+CONSTANT_Long	5
+CONSTANT_Double	6
+CONSTANT_NameAndType	12
+CONSTANT_Utf8	1
+CONSTANT_MethodHandle	15
+CONSTANT_MethodType	16
+CONSTANT_InvokeDynamic	18
+```
+
+
+
+```
+#
+CONSTANT_Class_info {
+    u1 tag;
+    u2 name_index;
+}
+
+CONSTANT_Fieldref_info {
+    u1 tag;
+    u2 class_index;
+    u2 name_and_type_index;
+}
+
+CONSTANT_Methodref_info {
+    u1 tag;
+    u2 class_index;
+    u2 name_and_type_index;
+}
+
+CONSTANT_InterfaceMethodref_info {
+    u1 tag;
+    u2 class_index;
+    u2 name_and_type_index;
+}
+
+CONSTANT_String_info {
+    u1 tag;
+    u2 string_index;
+}
+
+CONSTANT_Integer_info {
+    u1 tag;
+    u4 bytes;
+}
+
+CONSTANT_Float_info {
+    u1 tag;
+    u4 bytes;
+}
+
+CONSTANT_Long_info {
+    u1 tag;
+    u4 high_bytes;
+    u4 low_bytes;
+}
+
+CONSTANT_Double_info {
+    u1 tag;
+    u4 high_bytes;
+    u4 low_bytes;
+}
+
+CONSTANT_NameAndType_info {
+    u1 tag;
+    u2 name_index;
+    u2 descriptor_index;
+}
+
+CONSTANT_Utf8_info {
+    u1 tag;
+    u2 length;
+    u1 bytes[length];
+}
+
+CONSTANT_MethodHandle_info {
+    u1 tag;
+    u1 reference_kind;
+    u2 reference_index;
+}
+
+CONSTANT_MethodType_info {
+    u1 tag;
+    u2 descriptor_index;
+}
+
+CONSTANT_InvokeDynamic_info {
+    u1 tag;
+    u2 bootstrap_method_attr_index;
+    u2 name_and_type_index;
+}
+
+field_info {
+    u2             access_flags;
+    u2             name_index;
+    u2             descriptor_index;
+    u2             attributes_count;
+    attribute_info attributes[attributes_count];
+}
+
+method_info {
+    u2             access_flags;
+    u2             name_index;
+    u2             descriptor_index;
+    u2             attributes_count;
+    attribute_info attributes[attributes_count];
+}
+
+
+
+Flag Name	Value	Interpretation
+ACC_PUBLIC	0x0001	Declared public; may be accessed from outside its package.
+ACC_PRIVATE	0x0002	Declared private; accessible only within the defining class.
+ACC_PROTECTED	0x0004	Declared protected; may be accessed within subclasses.
+ACC_STATIC	0x0008	Declared static.
+ACC_FINAL	0x0010	Declared final; must not be overridden (§5.4.5).
+ACC_SYNCHRONIZED	0x0020	Declared synchronized; invocation is wrapped by a monitor use.
+ACC_BRIDGE	0x0040	A bridge method, generated by the compiler.
+ACC_VARARGS	0x0080	Declared with variable number of arguments.
+ACC_NATIVE	0x0100	Declared native; implemented in a language other than Java.
+ACC_ABSTRACT	0x0400	Declared abstract; no implementation is provided.
+ACC_STRICT	0x0800	Declared strictfp; floating-point mode is FP-strict.
+ACC_SYNTHETIC	0x1000	Declared synthetic; not present in the source code.
+
+
+attribute_info {
+    u2 attribute_name_index;
+    u4 attribute_length;
+    u1 info[attribute_length];
+}
+
+Code_attribute {
+    u2 attribute_name_index;
+    u4 attribute_length;
+    u2 max_stack;
+    u2 max_locals;
+    u4 code_length;
+    u1 code[code_length];
+    u2 exception_table_length;
+    {   u2 start_pc;
+        u2 end_pc;
+        u2 handler_pc;
+        u2 catch_type;
+    } exception_table[exception_table_length];
+    u2 attributes_count;
+    attribute_info attributes[attributes_count];
+}
+```
+
