@@ -1779,7 +1779,10 @@ Code_attribute {
     u2 attribute_name_index;
     u4 attribute_length;
     u2 max_stack;
-    u2 max_locals;
+    u2 max_lo
+    
+    
+    cals;
     u4 code_length;
     u1 code[code_length];
     u2 exception_table_length;
@@ -1793,3 +1796,22 @@ Code_attribute {
 }
 ```
 
+
+
+
+
+### 锁原理
+
+
+
+无锁状态：新创建的对象
+
+偏向锁：当只有一个线程访问被synchronized修饰的对象时，jvm会将访问当前锁对象的线程id记录到当前对象的对象头中
+
+
+
+轻量级锁(用户态)：当超过1个线程访问被synchronized修饰的对象时，会取消偏向锁，每个访问线程会生成一个lock record(锁记录)，不同线程会采用cas的方式竞争锁，竞争成功，会将锁记录记录到对象头中。
+
+
+
+重量级锁：轻量级锁的劣势在于当竞争的线程多了之后，或者一个线程的自旋次数过多，会导致cpu消耗过大。为了避免这种情况发生，当到达某一程度之后会采用重量级锁，从用户态转换为内核态，向操作系统申请锁，申请到锁之后会形成一个队列，其他没有获取到锁的线程会进入到队列进行等待，此时就不会对CPU造成很大负荷。
