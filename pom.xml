@@ -18,6 +18,16 @@
             <artifactId>jol-core</artifactId>
             <version>0.9</version>
         </dependency>
+        <dependency>
+            <groupId>commons-io</groupId>
+            <artifactId>commons-io</artifactId>
+            <version>2.7</version>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>1.16.18</version>
+        </dependency>
     </dependencies>
     <build>
         <plugins>
